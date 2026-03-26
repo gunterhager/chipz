@@ -173,6 +173,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
         }
 
         pub fn breakExec(self: *Self) void {
+            self.cur_op_pc = self.cpu.pc;
             self.stopped = true;
             self.step_mode = .none;
         }
