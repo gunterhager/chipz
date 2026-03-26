@@ -268,7 +268,14 @@ fn execWithDebug(frame_time_us: u32) u32 {
         }
         return ticks;
     } else {
-        return sys.exec(frame_time_us);
+        // Run at full speed, but track M1 cycles so cur_op_pc stays current.
+        const max_ticks = clock.microSecondsToTicks(KC85.FREQUENCY, frame_time_us);
+        for (0..max_ticks) |_| {
+            sys.bus = sys.tick(sys.bus);
+            ui_dbg_win.updatePc(sys.bus);
+        }
+        sys.updateKeyboard(frame_time_us);
+        return max_ticks;
     }
 }
 

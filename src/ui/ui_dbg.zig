@@ -102,7 +102,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
                 .valid = true,
                 .stopped = false,
                 .step_mode = .none,
-                .cur_op_pc = 0,
+                .cur_op_pc = opts.cpu.pc,
                 .stepover_pc = 0,
                 .num_breakpoints = 0,
                 .breakpoints = [_]Breakpoint{.{ .addr = 0, .enabled = false }} ** MAX_BREAKPOINTS,
@@ -179,8 +179,15 @@ pub fn Type(comptime cfg: TypeConfig) type {
             return false;
         }
 
+        /// Call after each CPU tick during full-speed execution to track the
+        /// current PC. Lightweight: only updates cur_op_pc on M1 cycles.
+        pub fn updatePc(self: *Self, pins: Bus) void {
+            if (pins & M1_MASK == M1_MASK) {
+                self.cur_op_pc = Z80.getAddr(pins);
+            }
+        }
+
         pub fn breakExec(self: *Self) void {
-            self.cur_op_pc = self.cpu.pc;
             self.stopped = true;
             self.step_mode = .none;
         }
@@ -550,8 +557,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
         }
 
         fn drawDisasm(self: *Self) void {
-            const center_pc = if (self.stopped) self.cur_op_pc else self.cpu.pc;
-            self.rebuildDasm(center_pc);
+            self.rebuildDasm(self.cur_op_pc);
 
             const glyph_width = ig.igCalcTextSize("F").x;
             const cell_width = 3.0 * glyph_width;
@@ -563,7 +569,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
             _ = ig.igBeginChild("##dbg_dasm", .{ .x = avail.x, .y = avail.y }, ig.ImGuiChildFlags_None, ig.ImGuiWindowFlags_None);
 
             for (self.dasm_lines[0..self.dasm_num_lines]) |line| {
-                const is_cur = line.addr == center_pc;
+                const is_cur = line.addr == self.cur_op_pc;
                 const has_bp = self.isBreakpointEnabled(line.addr);
 
                 var num_color_pushes: c_int = 0;

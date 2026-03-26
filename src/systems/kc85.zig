@@ -777,7 +777,7 @@ pub fn Type(comptime model: Model) type {
         // we ignore the whole tricky serial decoding and patch the
         // keycode directly into the right memory locations.
         //
-        fn updateKeyboard(self: *Self, micro_seconds: u32) void {
+        pub fn updateKeyboard(self: *Self, micro_seconds: u32) void {
             self.key_buf.update(micro_seconds);
 
             // don't do anything if interrupts are currently disabled,
