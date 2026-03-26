@@ -16,7 +16,7 @@ pub const TypeConfig = struct {
     cpu: type,
 };
 
-pub const StepMode = enum { none, into, over };
+pub const StepMode = enum { none, into, over, tick };
 
 pub const Breakpoint = struct {
     addr: u16,
@@ -201,6 +201,11 @@ pub fn Type(comptime cfg: TypeConfig) type {
             } else {
                 self.stepInto();
             }
+        }
+
+        pub fn stepTick(self: *Self) void {
+            self.stopped = false;
+            self.step_mode = .tick;
         }
 
         fn hasBreakpointAt(self: *const Self, addr: u16) bool {
@@ -526,12 +531,14 @@ pub fn Type(comptime cfg: TypeConfig) type {
             } else {
                 if (ig.igButton("Break [F5]")) self.breakExec();
             }
-            ig.igSameLine();
-            if (!stopped) ig.igBeginDisabled(true);
-            if (ig.igButton("Step Over [F6]")) self.stepOver();
-            ig.igSameLine();
-            if (ig.igButton("Step Into [F7]")) self.stepInto();
-            if (!stopped) ig.igEndDisabled();
+            if (stopped) {
+                ig.igSameLine();
+                if (ig.igButton("Over [F6]")) self.stepOver();
+                ig.igSameLine();
+                if (ig.igButton("Into [F7]")) self.stepInto();
+                ig.igSameLine();
+                if (ig.igButton("Tick [F8]")) self.stepTick();
+            }
         }
 
         fn drawDisasm(self: *Self) void {
