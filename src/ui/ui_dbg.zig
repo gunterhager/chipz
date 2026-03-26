@@ -143,6 +143,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
         /// Call after each individual CPU tick.
         /// Returns true if execution should stop.
         pub fn tick(self: *Self, pins: Bus) bool {
+            const is_tick_step = self.step_mode == .tick;
             if (pins & M1_MASK == M1_MASK) {
                 const pc = Z80.getAddr(pins);
                 self.cur_op_pc = pc;
@@ -168,6 +169,12 @@ pub fn Type(comptime cfg: TypeConfig) type {
                     self.last_triggered_bp = -1;
                     return true;
                 }
+            }
+            if (is_tick_step) {
+                self.stopped = true;
+                self.step_mode = .none;
+                self.last_triggered_bp = -1;
+                return true;
             }
             return false;
         }
@@ -655,6 +662,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
             if (self.stopped) {
                 if (ig.igIsKeyPressedEx(ig.ImGuiKey_F6, false)) self.stepOver();
                 if (ig.igIsKeyPressedEx(ig.ImGuiKey_F7, false)) self.stepInto();
+                if (ig.igIsKeyPressedEx(ig.ImGuiKey_F8, false)) self.stepTick();
                 if (ig.igIsKeyPressedEx(ig.ImGuiKey_F9, false)) self.toggleBreakpoint(self.cur_op_pc);
             }
         }
