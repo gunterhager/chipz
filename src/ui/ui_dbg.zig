@@ -23,17 +23,6 @@ pub const Breakpoint = struct {
     enabled: bool,
 };
 
-fn drawReg(comptime T: type, id: [*c]const u8, label: [*c]const u8, width: f32, ptr: *T) bool {
-    const data_type = if (T == u16) ig.ImGuiDataType_U16 else ig.ImGuiDataType_U8;
-    const fmt: [*c]const u8 = if (T == u16) "%04X" else "%02X";
-    ig.igPushItemWidth(width);
-    const changed = ig.igInputScalarEx(id, data_type, ptr, null, null, fmt, ig.ImGuiInputTextFlags_CharsHexadecimal);
-    ig.igPopItemWidth();
-    ig.igSameLine();
-    ig.igTextUnformatted(label);
-    return changed;
-}
-
 pub fn Type(comptime cfg: TypeConfig) type {
     return struct {
         const Self = @This();
@@ -85,7 +74,14 @@ pub fn Type(comptime cfg: TypeConfig) type {
 
         history: [NUM_HISTORY]u16,
         history_pos: u8,
+
+        show_heatmap: bool,
         show_history: bool,
+
+        show_registers: bool,
+        show_buttons: bool,
+        show_bytes: bool,
+        show_ticks: bool,
 
         dasm_lines: [NUM_DBG_LINES]DasmLine,
         dasm_num_lines: u8,
@@ -116,6 +112,11 @@ pub fn Type(comptime cfg: TypeConfig) type {
                 .history = [_]u16{0} ** NUM_HISTORY,
                 .history_pos = 0,
                 .show_history = false,
+                .show_heatmap = false,
+                .show_registers = true,
+                .show_buttons = true,
+                .show_bytes = true,
+                .show_ticks = true,
                 .dasm_lines = undefined,
                 .dasm_num_lines = 0,
             };
@@ -281,24 +282,45 @@ pub fn Type(comptime cfg: TypeConfig) type {
         }
 
         fn drawMenuBar(self: *Self) void {
-            if (!ig.igBeginMenuBar()) return;
-            if (ig.igBeginMenu("Debug")) {
-                if (ig.igMenuItemEx(if (self.stopped) "Continue [F5]" else "Break [F5]", null, false, true)) {
-                    if (self.stopped) self.continueExec() else self.breakExec();
+            if (ig.igBeginMenuBar()) {
+                if (ig.igBeginMenu("Debug")) {
+                    if (ig.igMenuItemEx(if (self.stopped) "Continue [F5]" else "Break [F5]", null, false, true)) {
+                        if (self.stopped) self.continueExec() else self.breakExec();
+                    }
+                    ig.igSeparator();
+                    if (ig.igMenuItemEx("Step Over [F6]", null, false, self.stopped)) self.stepOver();
+                    if (ig.igMenuItemEx("Step Into [F7]", null, false, self.stopped)) self.stepInto();
+                    ig.igSeparator();
+                    if (ig.igMenuItemEx("Add Breakpoint [F9]", null, false, true)) self.toggleBreakpoint(self.cur_op_pc);
+                    ig.igEndMenu();
                 }
-                ig.igSeparator();
-                if (ig.igMenuItemEx("Step Over [F6]", null, false, self.stopped)) self.stepOver();
-                if (ig.igMenuItemEx("Step Into [F7]", null, false, self.stopped)) self.stepInto();
-                ig.igSeparator();
-                if (ig.igMenuItemEx("Add Breakpoint [F9]", null, false, true)) self.toggleBreakpoint(self.cur_op_pc);
-                ig.igEndMenu();
+                _ = ig.igMenuItemBoolPtr("Breakpoints", null, &self.show_breakpoints, true);
+
+                if (ig.igBeginMenu("Show")) {
+                    _ = ig.igMenuItemBoolPtr("Memory Heatmap", null, &self.show_heatmap, true);
+                    _ = ig.igMenuItemBoolPtr("Execution History", null, &self.show_history, true);
+                    _ = ig.igMenuItemBoolPtr("Breakpoints", null, &self.show_breakpoints, true);
+                    ig.igSeparator();
+                    _ = ig.igMenuItemBoolPtr("Registers", null, &self.show_registers, true);
+                    _ = ig.igMenuItemBoolPtr("Button bar", null, &self.show_buttons, true);
+                    _ = ig.igMenuItemBoolPtr("Opcode Bytes", null, &self.show_bytes, true);
+                    _ = ig.igMenuItemBoolPtr("Opcode Ticks", null, &self.show_ticks, true);
+                    ig.igEndMenu();
+                }
+
+                ig.igEndMenuBar();
             }
-            _ = ig.igMenuItemBoolPtr("Breakpoints", null, &self.show_breakpoints, true);
-            if (ig.igBeginMenu("Show")) {
-                _ = ig.igMenuItemBoolPtr("History", null, &self.show_history, true);
-                ig.igEndMenu();
-            }
-            ig.igEndMenuBar();
+        }
+
+        fn drawReg(comptime T: type, id: [*c]const u8, label: [*c]const u8, width: f32, ptr: *T) bool {
+            const data_type = if (T == u16) ig.ImGuiDataType_U16 else ig.ImGuiDataType_U8;
+            const fmt: [*c]const u8 = if (T == u16) "%04X" else "%02X";
+            ig.igPushItemWidth(width);
+            const changed = ig.igInputScalarEx(id, data_type, ptr, null, null, fmt, ig.ImGuiInputTextFlags_CharsHexadecimal);
+            ig.igPopItemWidth();
+            ig.igSameLine();
+            ig.igTextUnformatted(label);
+            return changed;
         }
 
         fn drawRegisters(self: *Self) void {
@@ -641,10 +663,14 @@ pub fn Type(comptime cfg: TypeConfig) type {
             ig.igSetNextWindowSize(self.size, ig.ImGuiCond_FirstUseEver);
             if (ig.igBegin(self.title.ptr, &self.open, ig.ImGuiWindowFlags_MenuBar)) {
                 self.drawMenuBar();
-                self.drawButtons();
-                ig.igSeparator();
-                self.drawRegisters();
-                ig.igSeparator();
+                if (self.show_registers) {
+                    self.drawRegisters();
+                    ig.igSeparator();
+                }
+                if (self.show_buttons) {
+                    self.drawButtons();
+                    ig.igSeparator();
+                }
                 self.drawDisasm();
             }
             ig.igEnd();
