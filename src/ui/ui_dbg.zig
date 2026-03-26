@@ -259,9 +259,9 @@ pub fn Type(comptime cfg: TypeConfig) type {
             }
         }
 
-        fn rebuildDasm(self: *Self) void {
+        fn rebuildDasm(self: *Self, center_pc: u16) void {
             const look_back: u16 = 5 * 4;
-            const start = self.cur_op_pc -% look_back;
+            const start = center_pc -% look_back;
             var pc: u16 = start;
             var n: u8 = 0;
             while (n < NUM_DBG_LINES) {
@@ -542,7 +542,8 @@ pub fn Type(comptime cfg: TypeConfig) type {
         }
 
         fn drawDisasm(self: *Self) void {
-            self.rebuildDasm();
+            const center_pc = if (self.stopped) self.cur_op_pc else self.cpu.pc;
+            self.rebuildDasm(center_pc);
 
             const glyph_width = ig.igCalcTextSize("F").x;
             const cell_width = 3.0 * glyph_width;
@@ -554,7 +555,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
             _ = ig.igBeginChild("##dbg_dasm", .{ .x = avail.x, .y = avail.y }, ig.ImGuiChildFlags_None, ig.ImGuiWindowFlags_None);
 
             for (self.dasm_lines[0..self.dasm_num_lines]) |line| {
-                const is_cur = line.addr == self.cur_op_pc;
+                const is_cur = line.addr == center_pc;
                 const has_bp = self.isBreakpointEnabled(line.addr);
 
                 var num_color_pushes: c_int = 0;
