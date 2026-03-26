@@ -12,7 +12,7 @@ pub const Result = struct {
     num_bytes: u8,
     mnemonic: [MAX_MNEMONIC_LEN]u8 = [_]u8{0} ** MAX_MNEMONIC_LEN,
     mnemonic_len: u8,
-    cycles: u8 = 0,     // base T-state count (0 = unknown)
+    cycles: u8 = 0, // base T-state count (0 = unknown)
     cycles_alt: u8 = 0, // alternate count for conditional ops (0 = none)
 
     pub fn mnemonicSlice(self: *const Result) []const u8 {
@@ -602,9 +602,15 @@ fn calcCycles(ctx: *Ctx, start_pc: u16) void {
             0 => switch (y) {
                 0 => ctx.cycles = 4, // NOP
                 1 => ctx.cycles = 4, // EX AF,AF'
-                2 => { ctx.cycles = 8; ctx.cycles_alt = 13; }, // DJNZ: not-taken/taken
+                2 => {
+                    ctx.cycles = 8;
+                    ctx.cycles_alt = 13;
+                }, // DJNZ: not-taken/taken
                 3 => ctx.cycles = 12, // JR e
-                else => { ctx.cycles = 7; ctx.cycles_alt = 12; }, // JR cc: not-taken/taken
+                else => {
+                    ctx.cycles = 7;
+                    ctx.cycles_alt = 12;
+                }, // JR cc: not-taken/taken
             },
             1 => if (q == 0) {
                 ctx.cycles = if (pre != 0) 14 else 10; // LD rp,nn (LD IX,nn=14)
@@ -671,7 +677,10 @@ fn calcCycles(ctx: *Ctx, start_pc: u16) void {
             }
         },
         3 => switch (z) {
-            0 => { ctx.cycles = 5; ctx.cycles_alt = 11; }, // RET cc: not-taken=5, taken=11
+            0 => {
+                ctx.cycles = 5;
+                ctx.cycles_alt = 11;
+            }, // RET cc: not-taken=5, taken=11
             1 => if (q == 0) {
                 ctx.cycles = if (pre != 0) 14 else 10; // POP rp=10, POP IX/IY=14
             } else switch (p) {
@@ -691,7 +700,10 @@ fn calcCycles(ctx: *Ctx, start_pc: u16) void {
                 6 => ctx.cycles = 4, // DI
                 7 => ctx.cycles = 4, // EI
             },
-            4 => { ctx.cycles = 10; ctx.cycles_alt = 17; }, // CALL cc: not-taken=10, taken=17
+            4 => {
+                ctx.cycles = 10;
+                ctx.cycles_alt = 17;
+            }, // CALL cc: not-taken=10, taken=17
             5 => if (q == 0) {
                 ctx.cycles = if (pre != 0) 15 else 11; // PUSH rp=11, PUSH IX/IY=15
             } else switch (p) {
