@@ -275,9 +275,35 @@ pub fn Type(comptime cfg: TypeConfig) type {
         }
 
         fn rebuildDasm(self: *Self, center_pc: u16) void {
-            const look_back: u16 = 5 * 4;
-            const start = center_pc -% look_back;
-            var pc: u16 = start;
+            // Find the best starting point that, when disassembled forward,
+            // lands exactly on center_pc. This ensures is_cur matches a real
+            // line even though Z80 instructions are variable-length.
+            const TARGET_BEFORE: u8 = NUM_DBG_LINES / 3; // ~16 lines before center_pc
+            const MAX_LOOK_BYTES: u16 = TARGET_BEFORE * 4; // generous upper bound
+
+            var best_start: u16 = center_pc; // fallback: start AT center_pc
+            var best_n: u8 = 0;
+
+            var look: u16 = 1;
+            while (look <= MAX_LOOK_BYTES) : (look += 1) {
+                const start = center_pc -% look;
+                var pc = start;
+                var n: u8 = 0;
+                while (n <= TARGET_BEFORE) : (n += 1) {
+                    if (pc == center_pc) {
+                        if (n > best_n) {
+                            best_start = start;
+                            best_n = n;
+                        }
+                        break;
+                    }
+                    const res = z80dasm.op(pc, self.read_cb, self.userdata);
+                    pc = res.next_pc;
+                }
+                if (best_n >= TARGET_BEFORE) break;
+            }
+
+            var pc: u16 = best_start;
             var n: u8 = 0;
             while (n < NUM_DBG_LINES) {
                 const op_addr = pc;
@@ -631,7 +657,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
 
                 if (num_color_pushes > 0) ig.igPopStyleColorEx(num_color_pushes);
 
-                if (is_cur) ig.igSetScrollHereY(0.3);
+                if (is_cur and self.stopped) ig.igSetScrollHereY(0.3);
             }
 
             ig.igEndChild();
