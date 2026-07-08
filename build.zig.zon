@@ -1,6 +1,7 @@
 .{
     .name = .chipz,
     .version = "0.0.0",
+    .minimum_zig_version = "0.16.0",
     .fingerprint = 0x3ecb34175baf6f81,
     .dependencies = .{
         .sokol = .{

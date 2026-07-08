@@ -69,7 +69,8 @@ pub fn Type(comptime cfg: TypeConfig) type {
         num_breakpoints: u8,
         breakpoints: [MAX_BREAKPOINTS]Breakpoint,
         last_triggered_bp: i8, // index of BP that caused last stop; -1 = none/step
-        delete_bp_index: i8, // pending delete confirmation index; -1 = none
+        delete_bp_index: i8, // pending single-delete index; -1 = none
+
         show_breakpoints: bool,
 
         history: [NUM_HISTORY]u16,
@@ -478,8 +479,11 @@ pub fn Type(comptime cfg: TypeConfig) type {
             if (ig.igBegin("Breakpoints", &self.show_breakpoints, ig.ImGuiWindowFlags_None)) {
                 var scroll_down = false;
                 if (ig.igButton("Add..")) {
-                    self.addBreakpoint(self.cur_op_pc);
-                    scroll_down = true;
+                    if (self.num_breakpoints < MAX_BREAKPOINTS) {
+                        self.breakpoints[self.num_breakpoints] = .{ .addr = self.cur_op_pc, .enabled = true };
+                        self.num_breakpoints += 1;
+                        scroll_down = true;
+                    }
                 }
                 ig.igSameLine();
                 if (ig.igButton("Disable All")) {
@@ -503,6 +507,7 @@ pub fn Type(comptime cfg: TypeConfig) type {
                     if (ig.igButton("Ok")) {
                         self.num_breakpoints = 0;
                         self.last_triggered_bp = -1;
+                        self.delete_bp_index = -1;
                         ig.igCloseCurrentPopup();
                     }
                     ig.igSameLine();
@@ -511,9 +516,40 @@ pub fn Type(comptime cfg: TypeConfig) type {
                     }
                     ig.igEndPopup();
                 }
+                // Single-delete popup: opened and checked here (before the child window),
+                // mirroring Delete All?. delete_bp_index is set by Del inside the child
+                // on the previous frame, so the popup appears on the next frame.
+                if (self.delete_bp_index >= 0) {
+                    ig.igOpenPopup("Delete BP?", ig.ImGuiPopupFlags_None);
+                }
+                if (ig.igBeginPopupModal("Delete BP?", null, ig.ImGuiWindowFlags_AlwaysAutoResize)) {
+                    var addr_buf: [20]u8 = undefined;
+                    const s = std.fmt.bufPrint(&addr_buf, "Delete BP at {X:0>4}?\x00", .{
+                        self.breakpoints[@intCast(self.delete_bp_index)].addr,
+                    }) catch unreachable;
+                    _ = s;
+                    ig.igTextUnformatted(&addr_buf);
+                    ig.igSeparator();
+                    if (ig.igButton("Ok")) {
+                        const idx: usize = @intCast(self.delete_bp_index);
+                        self.removeBreakpointByIndex(idx);
+                        if (self.last_triggered_bp == self.delete_bp_index) {
+                            self.last_triggered_bp = -1;
+                        } else if (self.last_triggered_bp > self.delete_bp_index) {
+                            self.last_triggered_bp -= 1;
+                        }
+                        self.delete_bp_index = -1;
+                        ig.igCloseCurrentPopup();
+                    }
+                    ig.igSameLine();
+                    if (ig.igButton("Cancel")) {
+                        self.delete_bp_index = -1;
+                        ig.igCloseCurrentPopup();
+                    }
+                    ig.igEndPopup();
+                }
                 ig.igSeparator();
                 _ = ig.igBeginChild("##bp_list", .{}, ig.ImGuiChildFlags_None, ig.ImGuiWindowFlags_None);
-                var del_index: i8 = -1;
                 for (self.breakpoints[0..self.num_breakpoints], 0..) |*bp, i| {
                     ig.igPushIDInt(@as(c_int, @intCast(i)));
                     const is_active = self.last_triggered_bp >= 0 and @as(usize, @intCast(self.last_triggered_bp)) == i;
@@ -530,34 +566,9 @@ pub fn Type(comptime cfg: TypeConfig) type {
                     ig.igPopItemWidth();
                     ig.igSameLine();
                     if (ig.igButton("Del")) {
-                        del_index = @intCast(i);
+                        self.delete_bp_index = @intCast(i);
                     }
                     ig.igPopID();
-                }
-                if (del_index >= 0) {
-                    self.delete_bp_index = del_index;
-                    ig.igOpenPopup("Delete?", ig.ImGuiPopupFlags_None);
-                }
-                if (self.delete_bp_index >= 0 and ig.igBeginPopupModal("Delete?", null, ig.ImGuiWindowFlags_AlwaysAutoResize)) {
-                    var addr_buf: [16]u8 = undefined;
-                    const s = std.fmt.bufPrint(&addr_buf, "Delete breakpoint at {X:0>4}?\x00", .{
-                        self.breakpoints[@intCast(self.delete_bp_index)].addr,
-                    }) catch unreachable;
-                    _ = s;
-                    ig.igTextUnformatted(&addr_buf);
-                    ig.igSeparator();
-                    if (ig.igButton("Ok")) {
-                        self.removeBreakpointByIndex(@intCast(self.delete_bp_index));
-                        if (self.last_triggered_bp == self.delete_bp_index) self.last_triggered_bp = -1;
-                        self.delete_bp_index = -1;
-                        ig.igCloseCurrentPopup();
-                    }
-                    ig.igSameLine();
-                    if (ig.igButton("Cancel")) {
-                        self.delete_bp_index = -1;
-                        ig.igCloseCurrentPopup();
-                    }
-                    ig.igEndPopup();
                 }
                 if (scroll_down) ig.igSetScrollHereY(1.0);
                 ig.igEndChild();
